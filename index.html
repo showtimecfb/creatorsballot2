@@ -7,18 +7,20 @@
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     select { margin: 5px 0; width: 300px; }
-    button { margin-top: 15px; padding: 10px 20px; }
+    button { margin-top: 10px; padding: 8px 16px; }
   </style>
 </head>
 <body>
   <h1>Submit Your Top 25 Ballot</h1>
 
-  <!-- Login Form -->
+  <!-- Login / Signup Form -->
   <div id="auth">
-    <h2>Login</h2>
+    <h2>Login or Sign Up</h2>
     <input type="email" id="email" placeholder="Email">
     <input type="password" id="password" placeholder="Password">
-    <button onclick="login()">Login / Signup</button>
+    <br>
+    <button type="button" onclick="login()">Login</button>
+    <button type="button" onclick="signup()">Sign Up</button>
   </div>
 
   <!-- Ballot Form -->
@@ -31,7 +33,8 @@
   <script>
     // Replace with your Supabase project credentials
     const SUPABASE_URL = "https://dvtlrfiwoggyqhdadzqp.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2dGxyZml3b2dneXFoZGFkenFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0ODQ4OTksImV4cCI6MjA3MzA2MDg5OX0.cDORUcuFBkEIDrL54F6ZEo74NIrsQvCAeDD9NDOficY";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2dGxyZml3b2dneXFoZGFkenFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0ODQ4OTksImV4cCI6MjA3MzA2MDg5OX0.cDORUcuFBkEIDrL54F6ZEo74NIrsQvCAeDD9NDOficY"; // must be anon key
+    const REDIRECT_URL = "https://showtimecfb.github.io/creatorsballot2/"; // replace with your GitHub Pages URL
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     const teams = [
@@ -51,12 +54,10 @@
       "UAB","UCF","UCLA","USC","Utah",
       "Utah State","Vanderbilt","Virginia","Virginia Tech","Wake Forest",
       "Washington","Washington State","West Virginia","Wisconsin","Wyoming"
-      // ... add full FBS list (136 teams)
     ];
 
     let currentUser = null;
 
-    // Populate ballot form
     function buildBallotForm() {
       const list = document.getElementById("ballotList");
       list.innerHTML = "";
@@ -75,22 +76,48 @@
       }
     }
 
-    // Login/signup
-    async function login() {
-      const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        // If user not found, sign them up
-        const { data: signupData, error: signupError } = await supabase.auth.signUp({ email, password });
-        if (signupError) return alert(signupError.message);
-        currentUser = signupData.user;
-      } else {
-        currentUser = data.user;
-      }
+    function afterLogin() {
       document.getElementById("auth").style.display = "none";
       document.getElementById("ballotForm").style.display = "block";
       buildBallotForm();
+    }
+
+    // Signup function with redirectTo for GitHub Pages
+    async function signup() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: REDIRECT_URL }
+      });
+
+      if (error) return alert("Signup error: " + error.message);
+      alert("Signup successful! Check your email to confirm your account before logging in.");
+    }
+
+    // Login function with redirectTo for GitHub Pages
+    async function login() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+        options: { redirectTo: REDIRECT_URL }
+      });
+
+      if (error) return alert("Login error: " + error.message);
+
+      // Get session user
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        currentUser = session.user;
+        afterLogin();
+      } else {
+        alert("Login successful but no session found. Check your redirect URL and email confirmation.");
+      }
     }
 
     // Submit ballot
@@ -98,20 +125,15 @@
       e.preventDefault();
       if (!currentUser) return alert("Please log in first.");
 
-      // Collect ballot
       const selects = document.querySelectorAll("#ballotList select");
       const picks = [];
       selects.forEach((sel, idx) => {
         picks.push({ rank: idx + 1, team: sel.value });
       });
 
-      // Prevent duplicates
       const uniqueTeams = new Set(picks.map(p => p.team));
-      if (uniqueTeams.size < 25) {
-        return alert("Duplicate teams detected. Please fix.");
-      }
+      if (uniqueTeams.size < 25) return alert("Duplicate teams detected. Fix your ballot.");
 
-      // Save to Supabase
       const { error } = await supabase.from("ballots").upsert({
         user_id: currentUser.id,
         ballot: picks
@@ -120,7 +142,7 @@
       if (error) {
         alert("Error submitting ballot: " + error.message);
       } else {
-        alert("Ballot submitted!");
+        alert("Ballot submitted successfully!");
       }
     });
   </script>
