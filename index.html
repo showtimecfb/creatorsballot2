@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>College Football Ballot</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    select { margin: 5px 0; width: 300px; }
+    button { margin-top: 15px; padding: 10px 20px; }
+  </style>
+</head>
+<body>
+  <h1>Submit Your Top 25 Ballot</h1>
+
+  <!-- Login Form -->
+  <div id="auth">
+    <h2>Login</h2>
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <button onclick="login()">Login / Signup</button>
+  </div>
+
+  <!-- Ballot Form -->
+  <form id="ballotForm" style="display:none;">
+    <h2>Your Ballot</h2>
+    <ol id="ballotList"></ol>
+    <button type="submit">Submit Ballot</button>
+  </form>
+
+  <script>
+    // Replace with your Supabase project credentials
+    const SUPABASE_URL = "https://dvtlrfiwoggyqhdadzqp.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2dGxyZml3b2dneXFoZGFkenFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0ODQ4OTksImV4cCI6MjA3MzA2MDg5OX0.cDORUcuFBkEIDrL54F6ZEo74NIrsQvCAeDD9NDOficY";
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const teams = [
+      "Alabama","Arkansas","Auburn","Baylor","Boise State",
+      "BYU","Cincinnati","Clemson","Colorado","Duke",
+      "Florida","Florida State","Fresno State","Georgia","Georgia Tech",
+      "Houston","Illinois","Indiana","Iowa","Iowa State",
+      "Kansas","Kansas State","Kentucky","Liberty","Louisville",
+      "LSU","Marshall","Maryland","Memphis","Miami",
+      "Michigan","Michigan State","Minnesota","Mississippi State","Missouri",
+      "Navy","Nebraska","North Carolina","NC State","Northwestern",
+      "Notre Dame","Ohio State","Oklahoma","Oklahoma State","Ole Miss",
+      "Oregon","Oregon State","Penn State","Pittsburgh","Purdue",
+      "Rice","Rutgers","San Diego State","SMU","South Carolina",
+      "Stanford","Syracuse","TCU","Tennessee","Texas",
+      "Texas A&M","Texas Tech","Toledo","Troy","Tulane",
+      "UAB","UCF","UCLA","USC","Utah",
+      "Utah State","Vanderbilt","Virginia","Virginia Tech","Wake Forest",
+      "Washington","Washington State","West Virginia","Wisconsin","Wyoming"
+      // ... add full FBS list (136 teams)
+    ];
+
+    let currentUser = null;
+
+    // Populate ballot form
+    function buildBallotForm() {
+      const list = document.getElementById("ballotList");
+      list.innerHTML = "";
+      for (let i = 1; i <= 25; i++) {
+        const li = document.createElement("li");
+        const select = document.createElement("select");
+        teams.forEach(team => {
+          const opt = document.createElement("option");
+          opt.value = team;
+          opt.textContent = team;
+          select.appendChild(opt);
+        });
+        select.name = "team" + i;
+        li.appendChild(select);
+        list.appendChild(li);
+      }
+    }
+
+    // Login/signup
+    async function login() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        // If user not found, sign them up
+        const { data: signupData, error: signupError } = await supabase.auth.signUp({ email, password });
+        if (signupError) return alert(signupError.message);
+        currentUser = signupData.user;
+      } else {
+        currentUser = data.user;
+      }
+      document.getElementById("auth").style.display = "none";
+      document.getElementById("ballotForm").style.display = "block";
+      buildBallotForm();
+    }
+
+    // Submit ballot
+    document.getElementById("ballotForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!currentUser) return alert("Please log in first.");
+
+      // Collect ballot
+      const selects = document.querySelectorAll("#ballotList select");
+      const picks = [];
+      selects.forEach((sel, idx) => {
+        picks.push({ rank: idx + 1, team: sel.value });
+      });
+
+      // Prevent duplicates
+      const uniqueTeams = new Set(picks.map(p => p.team));
+      if (uniqueTeams.size < 25) {
+        return alert("Duplicate teams detected. Please fix.");
+      }
+
+      // Save to Supabase
+      const { error } = await supabase.from("ballots").upsert({
+        user_id: currentUser.id,
+        ballot: picks
+      }, { onConflict: "user_id" });
+
+      if (error) {
+        alert("Error submitting ballot: " + error.message);
+      } else {
+        alert("Ballot submitted!");
+      }
+    });
+  </script>
+</body>
+</html>
